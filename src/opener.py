@@ -51,10 +51,6 @@ except ImportError:
             pass
     GPIO = Dummy()
 
-
-GPIO.cleanup()
-GPIO.setmode(GPIO.BOARD)
-
 current_state = False
 
 
@@ -67,10 +63,12 @@ def open_door():
         return
     current_state = True
     lock.release()
+    GPIO.setmode(GPIO.BOARD)
     GPIO.setup(GPIO_PIN, GPIO.OUT)
     GPIO.output(GPIO_PIN, True)
     time.sleep(OUTPUT_TIME)
     GPIO.output(GPIO_PIN, False)
+    GPIO.cleanup()
     lock.acquire()
     current_state = False
     lock.release()

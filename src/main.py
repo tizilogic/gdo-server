@@ -2,7 +2,6 @@
 Server that accepts encrypted messages to set a GPIO pin to high upon valid
 request from a client.
 """
-from sessionhandler import SessionHandler
 
 __author__ = 'Tiziano Bettio'
 __license__ = 'MIT'
@@ -29,18 +28,28 @@ SOFTWARE."""
 
 import hashlib
 import threading
+import sys
+import os
+
+path = os.path.split(__file__)[0]
+if path not in sys.path:
+    sys.path.insert(0, path)
+if os.getcwd() != path:
+    os.chdir(path)
 
 import opener
 from settings import PASSPHRASE
 from settings import TIMEOUT
 from settings import SALT_LEN
 
+from sessionhandler import SessionHandler
+
 session_handler = SessionHandler(TIMEOUT, SALT_LEN)
 
 
 def application(environ, start_response):
     session_handler.cleanup()
-    if environ['PATH_INFO'][1:] == 'salt':
+    if environ['PATH_INFO'] == '/salt':
         response_body = session_handler.new_session().encode()
         status = '200 OK'
         response_headers = [
@@ -57,7 +66,7 @@ def application(environ, start_response):
             ('Content-Type', 'text/html'),
             ('Content-Length', str(len(response_body)))
         ]
-    elif environ['PATH_INFO'][1:] == 'open':
+    elif environ['PATH_INFO'] == '/open':
         q_split = environ['QUERY_STRING'].split('=')
         response_body = open('snippets/invalid.html', 'r').read().encode()
         if len(q_split) == 2:
@@ -80,8 +89,12 @@ def application(environ, start_response):
             ('Content-Length', str(len(response_body)))
         ]
     else:
-        response_body = b'404'  # session_handler._active() !!!DEBUGGING ONLY!!!
-        status = '404 NOT FOUND'
+        # instead of 404, just send random amount of random hex data...
+        num_bytes = int().from_bytes(os.urandom(2), 'little') // 2 + 1
+        response_body = hex(int().from_bytes(os.urandom(num_bytes), 'little'))
+        response_body = response_body[2:].encode()
+        # response_body =  session_handler._active() !!!DEBUGGING ONLY!!!
+        status = '200 OK'
         response_headers = [
             ('Content-Type', 'text/plain'),
             ('Content-Length', str(len(response_body)))
