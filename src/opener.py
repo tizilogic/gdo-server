@@ -5,7 +5,7 @@ Provides the function to call to open the garage door...
 __author__ = 'Tiziano Bettio'
 __license__ = 'MIT'
 __version__ = '0.1'
-__copyright__ = """Copyright (c) 2019 Tiziano Bettio
+__copyright__ = """Copyright (c) 2024 Tiziano Bettio
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -28,31 +28,31 @@ SOFTWARE."""
 import time
 import threading
 
-from settings import GPIO_PIN
-from settings import OUTPUT_TIME
+from settings import (
+    GPIO_PIN, OUTPUT_TIME, CODE_BITS, ZERO_HIGH_US, ZERO_LOW_US,
+    ONE_HIGH_US, ONE_LOW_US, PAUSE_US
+)
 
-try:
-    import RPi.GPIO as GPIO
-except ImportError:
-    class Dummy(object):
-        BOARD = None
-        OUT = None
+import pigpio
 
-        def cleanup(self):
-            pass
-
-        def setmode(self, *args, **kwargs):
-            pass
-
-        def setup(self, *args, **kwargs):
-            pass
-
-        def output(self, *args, **kwargs):
-            pass
-    GPIO = Dummy()
 
 current_state = False
 
+def gen_wave_form():
+    wave_form = []
+    for c in CODE_BITS:
+        if c == '0':
+            wave_form += [
+                pigpio.pulse(1 << GPIO_PIN, 0, ZERO_HIGH_US),
+                pigpio.pulse(0, 1 << GPIO_PIN, ZERO_LOW_US)
+            ]
+        elif c == '1':
+            wave_form += [
+                pigpio.pulse(1 << GPIO_PIN, 0, ONE_HIGH_US),
+                pigpio.pulse(0, 1 << GPIO_PIN, ONE_LOW_US)
+            ]
+    wave_form += [pigpio.pulse(0, 1 << GPIO_PIN, PAUSE_US)]
+    return wave_form
 
 def open_door():
     lock = threading.Lock()
@@ -63,12 +63,16 @@ def open_door():
         return
     current_state = True
     lock.release()
-    GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(GPIO_PIN, GPIO.OUT)
-    GPIO.output(GPIO_PIN, True)
+    pi = pigpio.pi()
+    pi.set_mode(GPIO_PIN, pigpio.OUTPUT)
+    pi.wave_clear()
+    pi.wave_add_generic(gen_wave_form())
+    w = pi.wave_create()
+    pi.wave_send_repeat(w)
     time.sleep(OUTPUT_TIME)
-    GPIO.output(GPIO_PIN, False)
-    GPIO.cleanup()
+    pi.wave_tx_stop()
+    pi.wave_clear()
+    pi.write(GPIO_PIN, 0)
     lock.acquire()
     current_state = False
     lock.release()
